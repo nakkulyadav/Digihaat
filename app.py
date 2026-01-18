@@ -24,8 +24,8 @@ def file_hash_bytes(data: bytes) -> str:
 
 
 st.set_page_config(page_title="Bulk Banner BG Transformer", layout="wide")
-st.title("🎨 Bulk Banner Background Theme Transformer")
-st.caption("Change ONLY the background theme color while keeping text, product, and CTA buttons unchanged.")
+st.title("Digihaat Bulk Banner Assignment")
+st.caption("This tool allows you to batch process product banners by changing their background theme color while preserving the foreground product details.")
 
 
 # -------------------------
@@ -36,10 +36,7 @@ st.sidebar.header("Theme Color")
 target_color = st.sidebar.color_picker("Target Theme Color", value="#F3E6D8")
 st.sidebar.caption("Pick the new theme color that should replace the banner background across the whole batch.")
 
-hex_input = st.sidebar.text_input("HEX Input (optional override)", value=target_color).strip()
-st.sidebar.caption("Paste an exact color code like #F3E6D8 for brand consistency.")
-
-final_color = hex_input if hex_input else target_color
+final_color = target_color
 
 # HEX Validation
 if not (final_color.startswith("#") and len(final_color) == 7):
@@ -48,13 +45,13 @@ if not (final_color.startswith("#") and len(final_color) == 7):
 # Locked strategy (no user selection)
 strategy = "LAB (Preserve Gradient)"
 
-strength = st.sidebar.slider("Recolor Strength (theme intensity)", 0.0, 1.0, 0.75, 0.01)
+strength = st.sidebar.slider("Recolor Strength (theme intensity)", 0.0, 1.0, 0.50, 0.01)
 st.sidebar.caption("Controls how strongly the background shifts to the new theme color.")
 
-feather_px = st.sidebar.slider("Mask Feather (edge smoothing)", 0, 15, 3, 1)
+feather_px = st.sidebar.slider("Mask Feather (edge smoothing)", 0, 15, 1, 1)
 st.sidebar.caption("Smoothens the edges between foreground and background to avoid jagged cutouts.")
 
-dilate_px = st.sidebar.slider("Mask Dilation (shadow preservation)", 0, 6, 1, 1)
+dilate_px = st.sidebar.slider("Mask Dilation (shadow preservation)", 0, 6, 0, 1)
 st.sidebar.caption("Expands foreground protection slightly to preserve soft shadows near the product.")
 
 
@@ -75,10 +72,10 @@ uploaded_files = st.file_uploader(
 )
 
 if not uploaded_files:
-    st.info("Upload multiple banners to start.")
+    st.info("Upload banners to start.")
     st.stop()
 
-st.write(f"✅ {len(uploaded_files)} image(s) uploaded")
+st.write(f"{len(uploaded_files)} image(s) uploaded")
 
 
 # -------------------------
@@ -99,7 +96,7 @@ def get_cached_mask(file_bytes: bytes, pil_img: Image.Image) -> np.ndarray:
     return alpha
 
 
-process_btn = st.button("🚀 Process Batch", type="primary")
+process_btn = st.button("Process Batch", type="primary")
 
 
 # -------------------------
@@ -113,7 +110,7 @@ if process_btn:
 
     results_for_zip = []
 
-    st.subheader("Preview (first 5 images)")
+    st.subheader("Preview (first few images)")
     st.caption("Left = Original | Right = Background Theme Changed")
     progress = st.progress(0)
 
@@ -152,8 +149,8 @@ if process_btn:
         safe_name = f"{f.name.rsplit('.', 1)[0]}_bg.png"
         results_for_zip.append((safe_name, out_pil))
 
-        # Preview first 5 images only (always side-by-side)
-        if i < 5:
+        # Preview first few images only (always side-by-side)
+        if i < 10:
             c1, c2 = st.columns(2)
             with c1:
                 st.image(pil_img, caption=f"Original: {f.name}", use_container_width=True)
@@ -162,12 +159,12 @@ if process_btn:
 
         progress.progress(int(((i + 1) / len(uploaded_files)) * 100))
 
-    st.success("✅ Batch processing complete!")
+    st.success("Batch processing complete!!")
 
     zip_bytes = images_to_zip_bytes(results_for_zip)
 
     st.download_button(
-        label="⬇️ Download Output ZIP",
+        label="Download Output ZIP",
         data=zip_bytes,
         file_name="converted_banners.zip",
         mime="application/zip"
