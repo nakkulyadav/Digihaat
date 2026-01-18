@@ -1,0 +1,19 @@
+# Virtual environment
+venv/
+.venv/
+
+# Streamlit cache
+.streamlit/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Output folders (optional)
+outputs/
+masks/
+*.zip

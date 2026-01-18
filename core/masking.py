@@ -15,31 +15,58 @@ def get_alpha_mask_u2net(pil_img: Image.Image) -> np.ndarray:
     alpha = rgba_np[:, :, 3].astype(np.float32) / 255.0
     return alpha
 
-
-def refine_alpha_mask(
-    alpha: np.ndarray,
-    feather_px: int = 3,
-    dilate_px: int = 1,
-) -> np.ndarray:
+def refine_alpha_mask_with_grabcut(original_bgr, alpha, feather_px=3, dilate_px=1):
     """
-    Refines alpha to preserve edges + keep soft shadows.
-    - feather_px: blur kernel size (odd). 0 disables feathering.
-    - dilate_px: dilates mask slightly to include shadows/near edges.
+    Improve U2Net mask using GrabCut refinement.
+    Keeps UI elements (buttons/text blocks) much better.
     """
-    alpha = np.clip(alpha, 0.0, 1.0)
 
-    # dilation (helps keep subtle shadows as foreground)
+    h, w = alpha.shape[:2]
+
+    # Convert alpha -> sure FG / sure BG
+    # Start by thresholding
+    fg_thresh = 0.65
+    bg_thresh = 0.10
+
+    grabcut_mask = np.full((h, w), cv2.GC_PR_BGD, dtype=np.uint8)
+
+    grabcut_mask[alpha <= bg_thresh] = cv2.GC_BGD
+    grabcut_mask[alpha >= fg_thresh] = cv2.GC_FGD
+
+    # Optional dilation to keep shadows & UI blocks
     if dilate_px > 0:
         k = 2 * dilate_px + 1
         kernel = np.ones((k, k), np.uint8)
-        alpha_u8 = (alpha * 255).astype(np.uint8)
-        alpha_u8 = cv2.dilate(alpha_u8, kernel, iterations=1)
-        alpha = alpha_u8.astype(np.float32) / 255.0
 
-    # feather edges (anti-alias)
-    if feather_px and feather_px > 0:
+        sure_fg = (grabcut_mask == cv2.GC_FGD).astype(np.uint8) * 255
+        sure_fg = cv2.dilate(sure_fg, kernel, iterations=1)
+        grabcut_mask[sure_fg == 255] = cv2.GC_FGD
+
+    # Run GrabCut
+    bgdModel = np.zeros((1, 65), np.float64)
+    fgdModel = np.zeros((1, 65), np.float64)
+
+    cv2.grabCut(
+        original_bgr,
+        grabcut_mask,
+        None,
+        bgdModel,
+        fgdModel,
+        3,
+        cv2.GC_INIT_WITH_MASK
+    )
+
+    # Extract final FG mask
+    final_fg = np.where(
+        (grabcut_mask == cv2.GC_FGD) | (grabcut_mask == cv2.GC_PR_FGD),
+        1.0,
+        0.0
+    ).astype(np.float32)
+
+    # Feather edges
+    if feather_px > 0:
         if feather_px % 2 == 0:
             feather_px += 1
-        alpha = cv2.GaussianBlur(alpha, (feather_px, feather_px), 0)
+        final_fg = cv2.GaussianBlur(final_fg, (feather_px, feather_px), 0)
 
-    return np.clip(alpha, 0.0, 1.0)
+    return np.clip(final_fg, 0.0, 1.0)
