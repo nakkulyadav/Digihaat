@@ -25,48 +25,45 @@ def file_hash_bytes(data: bytes) -> str:
 
 st.set_page_config(page_title="Bulk Banner BG Transformer", layout="wide")
 st.title("🎨 Bulk Banner Background Theme Transformer")
-st.caption("Recolor ONLY the background theme while preserving foreground (text/product/buttons) pixel-perfect.")
+st.caption("Change ONLY the background theme color while keeping text, product, and CTA buttons unchanged.")
 
 
 # -------------------------
 # Sidebar Controls
 # -------------------------
-st.sidebar.header("Settings")
+st.sidebar.header("Theme Color")
 
 target_color = st.sidebar.color_picker("Target Theme Color", value="#F3E6D8")
+st.sidebar.caption("Pick the new theme color that should replace the banner background across the whole batch.")
+
 hex_input = st.sidebar.text_input("HEX Input (optional override)", value=target_color).strip()
+st.sidebar.caption("Paste an exact color code like #F3E6D8 for brand consistency.")
 
 final_color = hex_input if hex_input else target_color
 
-# HEX Validation (Improvement)
+# HEX Validation
 if not (final_color.startswith("#") and len(final_color) == 7):
-    st.sidebar.error("Invalid HEX! Use format like #F3E6D8")
+    st.sidebar.error("Invalid HEX! Use format like #RRGGBB (example: #F3E6D8)")
 
-strategy = st.sidebar.selectbox(
-    "Recolor Strategy",
-    ["LAB (Preserve Gradient)", "HSV Hue Shift", "Overlay Blend (Approx)"],
-    index=0
-)
+# Locked strategy (no user selection)
+strategy = "LAB (Preserve Gradient)"
 
 strength = st.sidebar.slider("Recolor Strength (theme intensity)", 0.0, 1.0, 0.75, 0.01)
+st.sidebar.caption("Controls how strongly the background shifts to the new theme color.")
 
-st.sidebar.subheader("Mask Settings")
 feather_px = st.sidebar.slider("Mask Feather (edge smoothing)", 0, 15, 3, 1)
+st.sidebar.caption("Smoothens the edges between foreground and background to avoid jagged cutouts.")
+
 dilate_px = st.sidebar.slider("Mask Dilation (shadow preservation)", 0, 6, 1, 1)
+st.sidebar.caption("Expands foreground protection slightly to preserve soft shadows near the product.")
 
-st.sidebar.subheader("Edge Safety (Halo Fix)")
-safe_bg_erode_px = st.sidebar.slider("Background Safe Zone (px)", 0, 6, 1, 1)
 
-st.sidebar.subheader("Contrast Preservation")
-preserve_contrast = st.sidebar.checkbox("Preserve Background Contrast (CLAHE)", value=True)
-clahe_clip_limit = st.sidebar.slider("CLAHE Clip Limit", 1.0, 5.0, 2.0, 0.1)
+# Locked internal settings (no UI)
+safe_bg_erode_px = 0            # ✅ Edge safety OFF internally
+preserve_contrast = True         # ✅ Always preserve contrast
+clahe_clip_limit = 2.0           # ✅ Fixed contrast strength
 
 st.sidebar.markdown("---")
-preview_mode = st.sidebar.radio("Preview Mode", ["Side-by-side", "Toggle (Before/After)"], index=0)
-
-st.sidebar.write("✅ Output format: PNG")
-st.sidebar.write("✅ Batch download: ZIP")
-
 
 # -------------------------
 # Upload
@@ -85,7 +82,7 @@ st.write(f"✅ {len(uploaded_files)} image(s) uploaded")
 
 
 # -------------------------
-# Mask Cache (Improvement #6)
+# Mask Cache
 # -------------------------
 if "mask_cache" not in st.session_state:
     st.session_state.mask_cache = {}  # {file_hash: alpha_mask_float32}
@@ -117,6 +114,7 @@ if process_btn:
     results_for_zip = []
 
     st.subheader("Preview (first 5 images)")
+    st.caption("Left = Original | Right = Background Theme Changed")
     progress = st.progress(0)
 
     for i, f in enumerate(uploaded_files):
@@ -128,13 +126,13 @@ if process_btn:
         # 1) Cached Mask base
         alpha = get_cached_mask(file_bytes, pil_img)
 
-        # 2) Refine mask (this depends on sliders, so NOT cached)
+        # 2) Refine mask (depends on sliders)
         alpha_refined = refine_alpha_mask_with_grabcut(
             original_bgr=original_bgr,
             alpha=alpha,
             feather_px=feather_px,
             dilate_px=dilate_px
-)
+        )
 
         # 3) Recolor
         out_bgr = recolor_background(
@@ -154,22 +152,13 @@ if process_btn:
         safe_name = f"{f.name.rsplit('.', 1)[0]}_bg.png"
         results_for_zip.append((safe_name, out_pil))
 
-        # Preview first 5 images only
+        # Preview first 5 images only (always side-by-side)
         if i < 5:
-            if preview_mode == "Side-by-side":
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.image(pil_img, caption=f"Original: {f.name}", use_container_width=True)
-                with c2:
-                    st.image(out_pil, caption=f"Output: {safe_name}", use_container_width=True)
-
-            else:
-                # Toggle Mode (Before/After)
-                show_after = st.toggle(f"Show AFTER for {f.name}", value=True)
-                if show_after:
-                    st.image(out_pil, caption=f"AFTER: {safe_name}", use_container_width=True)
-                else:
-                    st.image(pil_img, caption=f"BEFORE: {f.name}", use_container_width=True)
+            c1, c2 = st.columns(2)
+            with c1:
+                st.image(pil_img, caption=f"Original: {f.name}", use_container_width=True)
+            with c2:
+                st.image(out_pil, caption=f"Output: {safe_name}", use_container_width=True)
 
         progress.progress(int(((i + 1) / len(uploaded_files)) * 100))
 
