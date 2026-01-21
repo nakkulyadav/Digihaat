@@ -1,21 +1,21 @@
+from typing import List, Tuple
+from PIL import Image
 import io
 import zipfile
-from PIL import Image
 
 
-def images_to_zip_bytes(results):
+def images_to_zip_bytes(items: List[Tuple[str, Image.Image]]) -> bytes:
     """
-    results: list of tuples -> (filename, PIL.Image)
-    Returns: bytes (zip)
+    Creates a ZIP (in-memory) from a list of (filename, PIL.Image).
+    Returns zip bytes for Streamlit download_button.
     """
-    mem_zip = io.BytesIO()
+    buf = io.BytesIO()
 
-    with zipfile.ZipFile(mem_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-        for fname, pil_img in results:
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for name, img in items:
             img_bytes = io.BytesIO()
-            pil_img.save(img_bytes, format="PNG")  # always PNG for quality
-            img_bytes.seek(0)
-            zf.writestr(fname, img_bytes.read())
+            img.save(img_bytes, format="PNG")
+            zf.writestr(name, img_bytes.getvalue())
 
-    mem_zip.seek(0)
-    return mem_zip.getvalue()
+    buf.seek(0)
+    return buf.getvalue()
